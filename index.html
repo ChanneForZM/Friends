@@ -1,0 +1,411 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+   <style type="text/css">
+       .listItem {
+            border-left:0px;
+            border-right:0px;
+           background-color: rgba(0,0,0,0.5);
+       }
+
+   </style>
+    <link rel="stylesheet"  href="libs/bootstrap3.3.7/css/bootstrap.css"/>
+     <script src="libs/nebulas.js"></script>
+    <script src="libs/jquery.js"></script>
+   
+    <script src="libs/bootstrap3.3.7/js/bootstrap.js"></script>
+    <script src="libs/modal.js"></script>
+    <style type="text/css">
+       
+    </style>
+    <script type="text/javascript">
+        // 合约地址，主网合约
+        var CONTRACT_ADDR = "n1oTEnp8c5aU7RhAbdbYC6dmo5Bb9StRqbh";
+
+        //测试网合约TX  3f0d39caf173c2f4b0e500ae93786681b1e3ca3ebd19399b8bac49bf1210b154
+       // var CONTRACT_ADDR = "n1wDf1MmEm8iKp6oPveamjJSEf4F92THhzt";
+        var isShowWallet = true;
+        var isShowAccount = true;
+        var CHAIN_ID = 1001;
+        var NONCE = 5;
+        var sAccount;
+        // 直接访问星云链的api
+        var nebulas = require("nebulas"),
+            Account = nebulas.Account,
+            neb = new nebulas.Neb();
+        // 设置使用的网络
+        neb.setRequest(new nebulas.HttpRequest("https://mainnet.nebulas.io"));
+        var Account = nebulas.Account;
+        var Transaction = neb.Transaction;
+        var api = neb.api;
+        var admin = neb.admin;
+        $(function () {
+            SelPswStore();
+        });
+        function SelPswStore() {
+            $("#fileWallet").on("change", function () {
+                if (getObjectURL($("#fileWallet").val())) {
+                    $("#btnSelWallet").text(getObjectURL($("#fileWallet").val()));
+                    $("#btnSelWallet").css("color", "black");
+                }                
+               
+                //
+            });
+        }
+        //建立一個可存取到該file的url
+        function getObjectURL(filePath) {
+            var index = filePath.substr(filePath.lastIndexOf('\\') + 1);
+            return index;
+        }
+        function SelWallet()
+        {
+            $("#fileWallet").click();
+        }
+
+        function UnlockKeyStore() {
+            if (document.getElementById('fileWallet').files.length <= 0)
+            {
+                ShowInfo("请选择钱包文件");
+                return;
+            }
+            if ($("#password").val().length <= 0)
+            {
+                ShowInfo("Error:钱包文件已加密，请前输入解锁密码");
+                return;
+            }
+            var file = document.getElementById('fileWallet').files[0];
+            var fileReader = new FileReader();
+            fileReader.onload = function (ev) {
+                var result = ev.target.result;
+                var parse = JSON.parse(result);
+
+                var address = parse.address;
+                $("#walletAddress").val(address);
+              
+
+                var account = new Account();
+                var password = document.getElementById('password').value;
+                try {
+                    account.fromKey(parse, password, false);
+                }
+                catch (err)
+                {
+                    ShowInfo("错误："+err);
+                  
+                    return;
+                }
+               
+                sAccount = account;
+
+                api.getAccountState(address)
+                    .then(function (resp) {
+                      
+                      
+                        $("#balance").val(resp.balance * Math.pow(10, -18) + " Nas");
+                        $("#showWalletPanel").attr("src", "img/Down.png");
+                        isShowWallet = false;
+                        $("#divWalletBody").hide();
+                        $("#divDapp").show();
+                        $("#btnAdd").attr("disabled", false);
+                        $("#btnSelName").attr("disabled", false);
+                        $("#btnSelAddress").attr("disabled", false);
+                       NONCE = parseInt(resp.nonce);
+                    })
+                    .catch(function (reason) {
+                        ShowInfo(reason);
+                        
+                    });
+            };
+            fileReader.readAsText(file);
+        }
+        function ShowInfo(info)
+        {
+           
+
+            Ewin.alert({ message: info }).on(function (e) {
+                    if (!e) {
+                        return;
+                    }
+                   
+                });
+          
+        }
+        function clkImg()
+        {
+            if (isShowWallet) {
+                $("#showWalletPanel").attr("src", "img/Down.png");
+                isShowWallet = false;
+                $("#divWalletBody").hide();
+                
+            }
+            else {
+                $("#showWalletPanel").attr("src", "img/Up.png");
+                isShowWallet = true;
+                $("#divWalletBody").show();
+            }
+            
+        }
+        function clkImg2() {
+            if (isShowAccount) {
+                $("#showAccountPanel").attr("src", "img/Down.png");
+                isShowAccount = false;
+                $("#divDapp").hide();
+
+            }
+            else {
+                $("#showAccountPanel").attr("src", "img/Up.png");
+                isShowAccount = true;
+                $("#divDapp").show();
+            }
+
+        }
+        function AddAccount()
+        {
+            var userName = $("#addName").val();
+            var psw = $("#addPsw").val();
+            if (userName === "" || psw === "") {
+                ShowInfo("账号或密码不能为空！");
+                return;
+            }
+
+            var tx = new nebulas.Transaction({
+                chainID: CHAIN_ID,
+                from: sAccount,
+                to: CONTRACT_ADDR,
+                value: 0,
+                nonce: NONCE + 1,
+                gasPrice: 1000000,
+                gasLimit: 2000000,
+                contract: { function: 'Add', args: '["' + userName + '","' + psw + '"]' } // userName , psw
+            });
+
+            tx.signTransaction();
+
+            api.sendRawTransaction(tx.toProtoString())
+                .then(function (resp) {
+                    ShowResult("成功添加账号【"+userName+"】","success")
+                  
+                })
+                .catch(function (err) {
+                    ShowResult("添加账号【" + userName + "】失败,"+err, "error")
+                   
+                });
+        }
+        function ShowResult(str,status)
+        {
+          
+            if (status == "success")
+            {
+                $("#selRes").append("<span style=\"color:green;font-size:\"16px\"\">" + getNowFormatDate() +"&nbsp;&nbsp;"+ str + "</span>" + "<br />");
+            }
+            else if (status == "error") {
+                $("#selRes").append("<span style=\"color:red;font-size:\"16px\"\">" + getNowFormatDate() + "&nbsp;&nbsp;" + str + "</span>" + "<br />");
+            }
+            else {
+                $("#selRes").append("<span style=\"color:black;font-size:\"16px\"\">" + getNowFormatDate() + "&nbsp;&nbsp;" + str + "</span>" + "<br />");
+            }
+           
+        }
+        function selWithName()
+        {
+            var userName = $("#selName").val();
+           
+            if (userName === "" ) {
+                ShowInfo("请先输入账号！");
+                return;
+            }
+            api.call({
+                from: sAccount.getAddressString(),
+                to: CONTRACT_ADDR,
+                value: 0,
+                nonce: NONCE + 1,
+                gasPrice: 1000000,
+                gasLimit: 2000000,
+                contract: { function: 'GetByName', args: '["' + userName + '"]' }
+            })
+                .then(function (resp) {
+                   var res= JSON.parse(resp.result);
+                   ShowResult("您查询账号【" + userName + "】的密码为：" + res.psw, "success");
+                   
+                })
+                .catch(function (err) {
+                    ShowResult("查询失败，" + err, "success");
+                });
+        }
+        function selWithAddress()
+        {
+            var address = $("#selAddress").val();
+
+            if (address === "") {
+                ShowInfo("请先输入地址！");
+                return;
+            }
+            api.call({
+                from: sAccount.getAddressString(),
+                to: CONTRACT_ADDR,
+                value: 0,
+                nonce: NONCE + 1,
+                gasPrice: 1000000,
+                gasLimit: 2000000,
+                contract: { function: 'GetByAddress', args: '["' + address + '"]' }
+            })
+                .then(function (resp) {
+                    var res = JSON.parse(resp.result);
+                    ShowResult("【查询结果】账号：" + res.userName + "；密码：" + res.psw, "success");
+                })
+                .catch(function (err) {
+                    ShowResult("查询失败，" + err, "success");
+                });
+        }
+        function getNowFormatDate() {
+            var date = new Date();
+         
+            var seperator2 = ":";
+           
+            var currentdate = formatter(date.getHours()) + seperator2 + formatter(date.getMinutes())
+                    + seperator2 + formatter(date.getSeconds());
+            return currentdate;
+        }
+        function formatter(str)
+        {
+            var temp = "00" + str;
+            return temp.substr(temp.length-2,2);
+
+        }
+        function about()
+        {
+            Ewin.alert({ message: "保存管理常用账号密码，防止密码遗忘。" }).on(function (e) {
+                if (!e) {
+                    return;
+                }
+
+            });
+        }
+    </script>
+</head>
+<body>
+  <div style="width:96%;margin-left:2%">
+      <form class="form-inline"  role="form">
+          <div class="row" style="margin-top:10px">
+              <div style="vertical-align:bottom">
+                  <div class="col-lg-11 col-md-11">
+                      <span style="font-size:38px ;margin-left:10px;">AccountManager</span>
+                  </div>
+                  <div class="col-lg-1 col-md-1">
+                      <a onclick="about()" style="font-size:18px">About</a>
+                  </div>
+              </div>
+
+          </div>
+          <hr style="width:100%" />
+          <div class="row">
+              <div class="col-md-1">
+                  
+              </div>
+              <div class="col-md-6">
+                 
+              </div>
+              <div class="col-md-4" style="background-color:aquamarine">
+                  <div style="height:600px;width:100%;border:1px solid">
+                      <ul class="list-group">
+                          
+                          <li class="list-group-item listItem" >
+                              <div style="height:50px;">
+                                  <table style="width:100%">
+                                      <tr>
+                                          <td style="width:50%">
+                                              <div style="float:left;width:50px;background-color:#b6ff00">
+                                                  <img src="img/man.png" style="margin:10px;width:30px;height:30px;" />
+                                              </div>
+                                              <div style="height:50px;float:left">
+                                                  <div style="width:100px;border-bottom:1px solid;font-size:18px">Channe</div>
+                                                  <div style="color:#d4d2d2">宣言宣言宣言</div>
+
+                                              </div>      
+                                          </td>
+                                          <td style="width:50%;text-align:right">
+                                              <span class="badge" style="background-color:#fc05d9">热心</span>
+                                              <span class="badge" style="background-color:#ff6a00">阳光</span>
+                                              <span class="badge" style="background-color:#1107f7">IT</span>
+                                          </td>
+                                      </tr>
+                                  </table>
+                                                              
+                              </div>
+                              
+                             
+                          </li>
+                          <li></li>
+                          <li class="list-group-item listItem">
+                              <div style="height:50px;">
+                                  <table style="width:100%">
+                                      <tr>
+                                          <td style="width:50%">
+                                              <div style="float:left;width:50px;background-color:#b6ff00">
+                                                  <img src="img/man.png" style="margin:10px;width:30px;height:30px;" />
+                                              </div>
+                                              <div style="height:50px;float:left">
+                                                  <div style="width:100px;border-bottom:1px solid;font-size:18px">Channe</div>
+                                                  <div style="color:#d4d2d2">宣言宣言宣言</div>
+
+                                              </div>
+                                          </td>
+                                          <td style="width:50%;text-align:right">
+                                              <span class="badge" style="background-color:#fc05d9">热心</span>
+                                              <span class="badge" style="background-color:#ff6a00">阳光</span>
+                                              <span class="badge" style="background-color:#1107f7">IT</span>
+                                          </td>
+                                      </tr>
+                                  </table>
+
+                              </div>
+
+
+                          </li>
+                        <li></li>
+                          <li class="list-group-item listItem">
+                              <div style="height:50px;">
+                                  <table style="width:100%">
+                                      <tr>
+                                          <td style="width:50%">
+                                              <div style="float:left;width:50px;background-color:#b6ff00">
+                                                  <img src="img/man.png" style="margin:10px;width:30px;height:30px;" />
+                                              </div>
+                                              <div style="height:50px;float:left">
+                                                  <div style="width:100px;border-bottom:1px solid;font-size:18px">Channe</div>
+                                                  <div style="color:#d4d2d2">宣言宣言宣言</div>
+
+                                              </div>
+                                          </td>
+                                          <td style="width:50%;text-align:right">
+                                              <span class="badge" style="background-color:#fc05d9">热心</span>
+                                              <span class="badge" style="background-color:#ff6a00">阳光</span>
+                                              <span class="badge" style="background-color:#1107f7">IT</span>
+                                          </td>
+                                      </tr>
+                                  </table>
+
+                              </div>
+
+
+                          </li>
+
+                      </ul>
+                  </div>
+              </div>
+              <div class="col-md-1">
+
+              </div>
+          </div>
+      </form>
+  </div>
+
+       
+
+
+
+</body>
+</html>
